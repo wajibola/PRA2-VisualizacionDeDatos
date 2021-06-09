@@ -1,0 +1,304 @@
+---
+title: 'Visualización de datos: PRA2'
+author: "Autor: Waziri Ajibola Lawal Mohammed"
+date: "MAY 2021"
+output:
+  pdf_document:
+    toc: yes
+    toc_depth: 3
+  html_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r echo=FALSE, message = FALSE, warning=FALSE}
+# Cargamos los paquetes R que vamos a usar
+library(ggplot2)
+library(dplyr)
+library(plyr)
+library(plotly)
+library(tidyverse)
+library(htmlwidgets)
+library(shiny)
+library('scales')
+```
+
+******
+# Introducción
+******
+
+En esta tarea se realizara la transformación del conjunto de datos escogido para la realización de la PRA2 con el objetivo de generar un juegos de datos final que nos permita responder a las preguntas planteadas en la PRA1 mediante visualizaciones interactivas.
+
+
+******
+# Realización de la tarea
+******
+
+A partir del conjunto de datos disponible en el siguiente enlace http://archive.ics.uci.edu/ml/datasets/Adult , se generará un nuevo juego de datos para implementar la visualización interactiva.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Cargamos el juego de datos
+datosAdult <- read.csv('http://archive.ics.uci.edu/ml/machine-learning-databases/adult/adult.data', 
+                       stringsAsFactors = FALSE, header = FALSE, na.strings = "?", 
+                       strip.white = TRUE, fill = F)
+
+# Nombres de los atributos
+names(datosAdult) <- c("age","workclass","fnlwgt","education","education_num","marital_status",
+                       "occupation","relationship","race","sex","capital_gain","capital_loss",
+                       "hour_per_week","native_country","income")
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Verificamos la estructura del conjunto de datos
+str(datosAdult)
+```
+
+Descripción de las variables contenidas en el fichero:
+
+* age: valor numérico con la edad de la unidad que responde.
+* work-class: factor que especifica en qué entidad o sector trabaja la unidad que responde.
+* fnlwgt: peso final que describe el número de individuos de la población objetiva que representa el colectivo representado en el conjunto de datos.
+* education: especifica el nivel académico más alto completado del individuo.
+* education_num: valor numérico que especifica el número de años de educación del individuo
+* marital_status: especifica la relación del individuo con otra persona.
+* occupation: especifica el trabajo del individuo.
+* relationship: especifica el papel de la familia del individuo.
+* race: describe la característica física del individuo
+* sex: factor con dos niveles (masculino y femenino) que especifica el género del individuo.
+* capital_gain: valor numérico que especifica las ganancias en los activos de capital del individuo.
+* capital_loss: valor numérico que especifica la pérdida incurrida en los activos de capital del individuo.
+* hour_per_week: valor numérico que especifica las horas de trabajo semanales del individuo.
+* native_country: factor que especifica el país nacimiento del individuo.
+* income: atributo objetivo que especifica los ingresos del individuo con nivel <= 50 y > 50.
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+#Estadísticas básicas
+summary(datosAdult)
+```
+
+A continuación, procedemos a contar cuantos nulos (y ‘?’ convertidos a NA) hay en el dataset escogido para la práctica.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Estadística para estudiar si existen valores vacíos
+colSums(is.na(datosAdult))
+```
+
+Vemos que los atributos workclass, occupation y native_country contienen nulos. Debido a que son atributos categóricos no se puede aplicar ningún tipo de media u operación estadística, por lo tanto, procedemos a eliminar los valores nulos.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+datosAdult <- na.omit(datosAdult)
+```
+
+
+Observamos si es necesario discretizar alguna variable del conjunto de datos.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+apply(datosAdult,2, function(x) length(unique(x)))
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+# Discretizamos las variables con pocas clases que interesan para este estudio
+cols<-c("income","occupation","sex")
+
+for (i in cols){
+  datosAdult[,i] <- as.factor(datosAdult[,i])
+}
+
+# Después de los cambios, analizamos la nueva estructura del conjunto de datos
+str(datosAdult)
+```
+
+Existen variables que se pueden combinar o eliminar ya que añaden informacion inneceseria al conjunto de datos o se pueden representar mediante otras variables:
+
+  - Con el nivel de educación completado ("education") podemos conocer o representar el número total de años de educación ("education_num").
+  
+  - Mediante las variables "sex" que nos indica el género y 'marital_status' que nos indica la situación sentimential podemos conocer o representar la variable "relationship".
+  
+  - La variable "fnlwgt" representa el peso final que describe el número de individuos de la población y por lo tanto se puede considerar irrelevante.
+  
+  - Si observamos la variable "native_country", vemos que la mayoria de observaciones son Estados Unidos, por lo tanto tambien podemos excluirla.
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Reducción de la dimensionalidad
+datosAdult$education <- NULL
+datosAdult$relationship <- NULL
+datosAdult$fnlwgt <- NULL
+datosAdult$native_country <- NULL
+```
+
+Procedemos a la generación de histogramas y de las gráficas quantile-quantile para entender la distribución de cada variable numérica para decidir si existe más variables a eliminar para reducir nuestro conjunto de datos.
+
+```{r}
+par(mfrow=c(2,2))
+for(i in 1:ncol(datosAdult)) {
+  if (is.numeric(datosAdult[,i])){
+    qqnorm(datosAdult[,i],main = paste("Normal Q-Q Plot for ",colnames(datosAdult)[i]))
+    qqline(datosAdult[,i],col="red")
+    hist(datosAdult[,i], 
+      main=paste("Histogram for ", colnames(datosAdult)[i]), 
+      xlab=colnames(datosAdult)[i], freq = FALSE)
+  }
+}
+```
+
+Observamos que casi todas las distribuciones están sesgadas positivamente. Además, los histogramas muestran que las distribuciones las variables "capital_gain" y "capital_loss" están muy confusas ya que la mayoria de sus observaciones son 0. Por lo tanto podemos eliminar estas variables.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Reducción de la dimensionalidad
+datosAdult$capital_gain <- NULL
+datosAdult$capital_loss <- NULL
+```
+
+Procedemos a analizar las variables del conjunto de datos para sacar una conclusión.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# # Visualizamos la relación entre las variables "sex" e "income"
+# scatterPlot <- ggplot(data=datosAdult,aes(x=sex, fill=income))+geom_bar()+ggtitle('Ganancias por género')
+# ggplotly(scatterPlot)
+# 
+# # Visualizamos la relación entre las variables "age" y "sex"
+# scatterPlot1 <- ggplot(data=datosAdult,aes(x=age,fill=sex))+geom_bar()
+# ggplotly(scatterPlot1)
+# 
+# # Visualizamos la relación entre las variables "age" e "income"
+# scatterPlot2 <- ggplot(data=datosAdult,aes(x=age,fill=income))+geom_bar()+ggtitle('Ganancias por edad')
+# ggplotly(scatterPlot2)
+```
+
+<!-- Podemos observar que para los dos géneros, la mayoria ganan menos de 50000 dolares al año. Tambien podemos ver mediante las gráficas que la edad de las personas que ganan más de 50000 dolares al año se situa entre los 30-50 años. -->
+
+<!-- Además de analizar la relación entren el sexo, la edad y las ganancias, tambien podemos analizar las siguientes relaciones: relación entre industria ("workclass") en la que se trabaja y las ganancias anuales ("income"), relación entre el puesto de trabajo ("occupation") y las ganancias anuales ("income") y la relación entre el nivel del estudio obtenido con el numero de años de estudio ("education_num") y las ganancias ("income"). -->
+
+
+Como se puede observar en el conjunto de datos, podemos agrupar los atributos de las variables "workclass", "occupation" en subgrupos.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Empezamos por la variable "workclass" que se dividira en 4 grupos: Government (Federal-gov, Local-gov, State-gov), Self-Employed (Self-emp-inc, Self-emp-not-inc), Unknown(Never-worked, , Without-pay) and Private.
+
+# summary(datosAdult$workclass)
+table(datosAdult$workclass)
+
+datosAdult$workclass <- gsub("Federal-gov", "Government", datosAdult$workclass)
+datosAdult$workclass <- gsub("Local-gov", "Government", datosAdult$workclass)
+datosAdult$workclass <- gsub("State-gov", "Government", datosAdult$workclass) 
+datosAdult$workclass <- gsub("Self-emp-inc", "SelfEmployed", datosAdult$workclass)
+datosAdult$workclass <- gsub("Self-emp-not-inc", "SelfEmployed", datosAdult$workclass)
+datosAdult$workclass <- gsub("Never-worked", "Unknown", datosAdult$workclass)
+datosAdult$workclass <- gsub("Without-pay", "Unknown", datosAdult$workclass)
+
+table(datosAdult$workclass)
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Podemos combinar los trabajos y separarlos en varios grupos. 
+
+# summary(datosAdult$occupation)
+table(datosAdult$occupation)
+datosAdult$occupation <- gsub("Adm-clerical", "OfficeLabour", datosAdult$occupation)
+datosAdult$occupation <- gsub("Exec-managerial", "OfficeLabour", datosAdult$occupation)
+datosAdult$occupation <- gsub("Craft-repair", "ManualLabour", datosAdult$occupation)
+datosAdult$occupation <- gsub("Farming-fishing", "ManualLabour", datosAdult$occupation)
+datosAdult$occupation <- gsub("Handlers-cleaners", "ManualLabour", datosAdult$occupation)
+datosAdult$occupation <- gsub("Machine-op-inspct", "ManualLabour", datosAdult$occupation)
+datosAdult$occupation <- gsub("Transport-moving", "ManualLabour", datosAdult$occupation)
+datosAdult$occupation <- gsub("Other-service", "Service", datosAdult$occupation)
+datosAdult$occupation <- gsub("Priv-house-serv", "Service", datosAdult$occupation)
+datosAdult$occupation <- gsub("Protective-serv", "Service", datosAdult$occupation)
+datosAdult$occupation <- gsub("Tech-support", "Service", datosAdult$occupation)
+datosAdult$occupation <- gsub("Prof-specialty", "Professional", datosAdult$occupation)
+
+# Se podria agrupar Armed-Forces con professional pero ya que son pocos datos lo agrupo con Unknown.
+datosAdult$occupation <- gsub("Armed-Forces", "Unknown", datosAdult$occupation)
+table(datosAdult$occupation)
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# summary(datosAdult$marital_status)
+table(datosAdult$occupation)
+
+datosAdult$marital_status <- gsub("Married-AF-spouse", "Married", datosAdult$marital_status)
+datosAdult$marital_status <- gsub("Married-civ-spouse", "Married", datosAdult$marital_status)
+datosAdult$marital_status <- gsub("Married-spouse-absent", "Married", datosAdult$marital_status)
+datosAdult$marital_status <- gsub("Never-married", "Single", datosAdult$marital_status)
+
+table(datosAdult$occupation)
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# ## UI
+# # Use a fluid Bootstrap layout
+# ui <- fluidPage(
+# 
+#   # Give the page a title
+#   titlePanel("Adult Income Dataset Visualization"),
+# 
+#   # Generate a row with a sidebar
+#   sidebarLayout(
+#     # Define the sidebar with one input
+#     sidebarPanel(
+#       selectInput("Attributes", "Select Attributes:",
+#                   choices = c("workclass", "education_num", "marital_status","occupation","race")),
+#       hr()
+#     ),
+# 
+#     # Create a spot for the barplot
+#     mainPanel(
+#        plotOutput("Plot")
+#     )
+# 
+#   )
+# )
+# 
+# # Define a server for the Shiny app
+# server <- function(input, output) {
+#   x <- reactive({
+#     df <- data.frame(table(datosAdult$income, datosAdult[, input$Attributes]))
+#     names(df) <- c('income', 'education_num', 'count')
+# 
+#     # calculate the percentages
+#     df <- ddply(df, .(education_num), transform, percent = round(count/sum(count) * 100))
+#   
+#     # format the labels and calculate their positions
+#     df <- ddply(df, .(education_num), transform, pos = (cumsum(count) - 0.5 * count))
+#     df$label <- paste(sprintf("%.0f", df$percent), "%")
+#   
+#     if (input$Attributes == "education_num") {
+#       # remove some in group percentage to avoid overlapped text
+#       df$label[which(df$percent < 5)] <- NA
+#     }
+#     
+#     return(df)
+#   })
+#   
+#   
+#   # Fill in the spot we created for a plot
+#   output$Plot <- renderPlot({
+#     ggplot(data = x(), aes(x = education_num, y = count, fill = income)) +
+#         geom_bar(stat = "identity") +
+#           geom_text(aes(y = pos, label = label), size = 2) +
+#             ggtitle(paste('Ganancias por ', input$Attributes))  +
+#             xlab(input$Attributes)
+#   })
+# }
+# shinyApp(ui, server)
+```
+
+******
+# Archivo final
+******
+
+Una vez realizado el preprocesamiento sobre los datos, guardaremos el nuevo juego de datos.
+
+```{r}
+write.csv(datosAdult, "../data/adult_clean.csv", row.names = FALSE)
+```
+
