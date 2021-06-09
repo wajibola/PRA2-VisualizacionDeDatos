@@ -222,14 +222,14 @@ table(datosAdult$occupation)
 
 ```{r echo=TRUE, message=FALSE, warning=FALSE}
 # summary(datosAdult$marital_status)
-table(datosAdult$occupation)
+table(datosAdult$marital_status)
 
 datosAdult$marital_status <- gsub("Married-AF-spouse", "Married", datosAdult$marital_status)
 datosAdult$marital_status <- gsub("Married-civ-spouse", "Married", datosAdult$marital_status)
 datosAdult$marital_status <- gsub("Married-spouse-absent", "Married", datosAdult$marital_status)
 datosAdult$marital_status <- gsub("Never-married", "Single", datosAdult$marital_status)
 
-table(datosAdult$occupation)
+table(datosAdult$marital_status)
 ```
 
 
